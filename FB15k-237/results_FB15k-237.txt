@@ -1,0 +1,32 @@
+Valid:
+left_mr: 107.65623
+left_mrr: 0.46990
+right_mr: 257.89689
+right_mrr: 0.26644
+mr: 182.77656
+mrr: 0.36817
+left_hits@1: 0.37759
+right_hits@1: 0.17993
+hits@1: 0.27876
+left_hits@3: 0.51178
+right_hits@3: 0.29130
+hits@3: 0.40154
+left_hits@10: 0.65406
+right_hits@10: 0.44123
+hits@10: 0.54765
+Test:
+left_mr: 124.20131
+left_mrr: 0.46187
+right_mr: 268.69721
+right_mrr: 0.26511
+mr: 196.44926
+mrr: 0.36349
+left_hits@1: 0.36685
+right_hits@1: 0.17722
+hits@1: 0.27204
+left_hits@3: 0.50669
+right_hits@3: 0.29273
+hits@3: 0.39971
+left_hits@10: 0.64781
+right_hits@10: 0.44000
+hits@10: 0.54390
