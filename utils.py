@@ -1,3 +1,5 @@
+"""Tensor composition and graph-normalization utilities used by ORCA-GCN."""
+
 # This file is based on the CompGCN author's implementation
 # <https://github.com/malllabiisc/CompGCN/blob/master/helper.py>.
 # It implements the operation of circular convolution in the ccorr function and an additional in_out_norm function for norm computation.
