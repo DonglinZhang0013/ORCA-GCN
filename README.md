@@ -84,7 +84,7 @@ The manuscript's principal CompGCN/ORCA-GCN comparison reports five-run means an
 
 Precomputed ORC arrays are reused during training. To inspect the preprocessing graph construction without overwriting data:
 
-    python scripts/compute_orc.py --data FB15k-237 --dry_run
+    python scripts/compute_orc.py --data FB15k-237 --dry-run
 
 To recompute arrays, install the optional preprocessing dependencies and run:
 
