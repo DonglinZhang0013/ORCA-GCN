@@ -1,3 +1,10 @@
+"""ORCA-GCN encoder and ConvE decoder.
+
+Layer 1 applies non-parametric curvature-induced attention. Layer 2 computes
+cosine dissimilarity only on existing directed message edges, so no all-pairs
+entity similarity matrix is constructed.
+"""
+
 import dgl
 import dgl.function as fn
 import torch as th
@@ -8,9 +15,14 @@ from utils import ccorr
 from dgl.nn import edge_softmax
 
 class GraphConv(nn.Module):
+    """Relation-aware graph convolution with geometry or divergence attention.
+
+    The first layer reuses precomputed neighborhood-softmax ORC weights. Later
+    layers compute edge-wise cosine dissimilarity in O(|E|d) time.
+    """
 
     def __init__(
-        self, in_dim, out_dim, comp_fn="sub", batchnorm=True, dropout=0.1, is_first_layer = False
+        self, in_dim, out_dim, comp_fn="sub", batchnorm=True, dropout=0.1, is_first_layer = False, tau = 1.0, uniform_geometry = False
     ):
         super(GraphConv, self).__init__()
         self.in_dim = in_dim
@@ -19,6 +31,8 @@ class GraphConv(nn.Module):
         self.actvation = th.tanh
         self.batchnorm = batchnorm
         self.is_first_layer = is_first_layer
+        self.tau = tau
+        self.uniform_geometry = uniform_geometry
 
         self.dropout = nn.Dropout(dropout)
 
@@ -71,16 +85,28 @@ class GraphConv(nn.Module):
             new_comp_h[out_edges_idx] = comp_h_O
             new_comp_h[in_edges_idx] = comp_h_I
 
-            if self.is_first_layer: 
-                g.edata["1-orc"] = edge_softmax(self.g, 1.0 - orc, norm_by="dst")
-                g.edata["new_comp_h"] = new_comp_h * g.edata["1-orc"].unsqueeze(-1)
+            if self.is_first_layer:
+                # Geometry-aware layer. The attention weights softmax(1 - kappa)
+                # are pre-computed once in data_loader.py and stored on the graph
+                # as g.edata["1-orc"]; here we simply reuse them.
+                if self.uniform_geometry:
+                    # Ablation (w/o Geometry-Aware): replace curvature weights with
+                    # uniform weighting, i.e. softmax over a constant per dst node.
+                    zeros = th.zeros(g.num_edges(), device=new_comp_h.device)
+                    w = edge_softmax(g, zeros, norm_by="dst")
+                    g.edata["new_comp_h"] = new_comp_h * w.unsqueeze(-1)
+                else:
+                    g.edata["new_comp_h"] = new_comp_h * g.edata["1-orc"].unsqueeze(-1)
             else:
-                tau = 0.6
+                # Semantic-aware layer. Attention is a softmax over the
+                # tau-scaled cosine dissimilarity between neighbouring nodes.
+                # tau is a scaling (temperature) coefficient: tau = 1.0 recovers
+                # the plain softmax(1 - cos) form written in the paper.
                 src_h = n_in_feats[g.edges()[0]]
                 dst_h = n_in_feats[g.edges()[1]]
                 sim = F.cosine_similarity(src_h, dst_h, dim=1)
-                sim = tau * (1 - sim)
-                g.edata["sim"] = edge_softmax(g, sim, norm_by="dst")
+                dissim = self.tau * (1.0 - sim)
+                g.edata["sim"] = edge_softmax(g, dissim, norm_by="dst")
                 g.edata["new_comp_h"] = new_comp_h * g.edata["sim"].unsqueeze(-1)
 
             # Step 3: sum comp results to both src and dst nodes
@@ -115,6 +141,8 @@ class GraphConv(nn.Module):
         return n_out_feats, r_out_feats[:-1]
 
 class ORCAGCN(nn.Module):
+    """Two-layer ORCA-GCN encoder over entities and relation embeddings."""
+
     def __init__(
         self,
         num_bases,
@@ -126,6 +154,8 @@ class ORCAGCN(nn.Module):
         batchnorm=True,
         dropout=0.1,
         layer_dropout=[0.3, 0.3],
+        tau=1.0,
+        uniform_geometry=False,
     ):
         super(ORCAGCN, self).__init__()
 
@@ -138,6 +168,8 @@ class ORCAGCN(nn.Module):
         self.batchnorm = batchnorm
         self.dropout = dropout
         self.layer_dropout = layer_dropout
+        self.tau = tau
+        self.uniform_geometry = uniform_geometry
         self.num_layer = len(layer_size)
         self.n_agg_feats = None
 
@@ -150,7 +182,8 @@ class ORCAGCN(nn.Module):
                 comp_fn=self.comp_fn,
                 batchnorm=self.batchnorm,
                 dropout=self.dropout,
-                is_first_layer = True
+                is_first_layer = True,
+                uniform_geometry = self.uniform_geometry
             )
         )
         for i in range(self.num_layer - 1):
@@ -161,6 +194,7 @@ class ORCAGCN(nn.Module):
                     comp_fn=self.comp_fn,
                     batchnorm=self.batchnorm,
                     dropout=self.dropout,
+                    tau=self.tau,
                 )
             )
 
@@ -199,6 +233,8 @@ class ORCAGCN(nn.Module):
 
 # Use convE as the score function
 class ORCAGCN_ConvE(nn.Module):
+    """ORCA-GCN encoder followed by the ConvE link-prediction decoder."""
+
     def __init__(
         self,
         num_bases,
@@ -216,6 +252,8 @@ class ORCAGCN_ConvE(nn.Module):
         ker_sz=5,
         k_w=5,
         k_h=5,
+        tau=1.0,
+        uniform_geometry=False,
     ):
         super(ORCAGCN_ConvE, self).__init__()
 
@@ -237,6 +275,8 @@ class ORCAGCN_ConvE(nn.Module):
             batchnorm,
             dropout,
             layer_dropout,
+            tau=tau,
+            uniform_geometry=uniform_geometry,
         )
 
         # batchnorms to the combined (sub+rel) emb
