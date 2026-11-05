@@ -1,28 +1,17 @@
-# ============================================================
 # ORCA-GCN environment (Python 3.8 or 3.9)
-# ============================================================
-# Install torch and DGL CUDA-specific builds FIRST, matching your
-# CUDA version, from their official indexes. Then install this file.
-#
-# Recommended tested-compatible stack:
-# Python 3.9 + PyTorch 1.12.1 + DGL 0.9.1
+# Install torch and DGL CUDA-specific builds FIRST, matching your CUDA version.
+# Recommended tested-compatible stack: Python 3.9 + PyTorch 1.12.1 + DGL 0.9.1
 # torch_scatter is not required by the current implementation.
-#
-# CUDA 11.3 example:
+# CUDA 11.3:
 # pip install torch==1.12.1+cu113 --extra-index-url https://download.pytorch.org/whl/cu113
 # pip install dgl==0.9.1 -f https://data.dgl.ai/wheels/cu113/repo.html
-#
-# CUDA 11.6 example:
+# CUDA 11.6:
 # pip install torch==1.12.1+cu116 --extra-index-url https://download.pytorch.org/whl/cu116
 # pip install dgl==0.9.1 -f https://data.dgl.ai/wheels/cu116/repo.html
-#
-# CPU-only example:
+# CPU:
 # pip install torch==1.12.1+cpu --extra-index-url https://download.pytorch.org/whl/cpu
 # pip install dgl==0.9.1 -f https://data.dgl.ai/wheels/repo.html
-#
-# Choose the wheel matching your CUDA/Python version:
-# https://www.dgl.ai/pages/start.html
-# ============================================================
+# Select a compatible wheel: https://www.dgl.ai/pages/start.html
 
 numpy>=1.21,<2.0
 ordered-set
