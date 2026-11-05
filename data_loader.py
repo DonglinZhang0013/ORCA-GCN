@@ -1,12 +1,20 @@
+"""Dataset and sparse graph construction for ORCA-GCN.
+
+The loader reads text triples plus two aligned NumPy arrays containing the
+forward training edges and their precomputed Ollivier--Ricci curvature values.
+It creates inverse message-passing edges online and assigns each inverse edge
+the curvature value of its corresponding forward edge.
+"""
+
 from collections import defaultdict as ddict
 
+import os
 import dgl
 
 import numpy as np
 import torch
 from ordered_set import OrderedSet
 from torch.utils.data import DataLoader, Dataset
-from torch_scatter import scatter_softmax
 from dgl.nn import edge_softmax
 
 
@@ -111,7 +119,8 @@ class TestDataset(Dataset):
 
 
 class Data(object):
-    def __init__(self, dataset, lbl_smooth, num_workers, batch_size):
+    def __init__(self, dataset, lbl_smooth, num_workers, batch_size,
+                 random_curvature=False, prune_topk_orc=0.0):
         """
         Reading in raw triples and converts it into a standard format.
         Parameters
@@ -140,6 +149,8 @@ class Data(object):
         self.lbl_smooth = lbl_smooth
         self.num_workers = num_workers
         self.batch_size = batch_size
+        self.random_curvature = random_curvature
+        self.prune_topk_orc = prune_topk_orc
 
         # read in raw data and get mappings
         ent_set, rel_set = OrderedSet(), OrderedSet()
@@ -151,10 +162,10 @@ class Data(object):
                 ent_set.add(obj)
         self.ent2id = {}
         self.rel2id = {}
-        for idx, line in enumerate(open('./FB15k-237/entities.txt')):
+        for idx, line in enumerate(open('./{}/entities.txt'.format(self.dataset))):
             entity_str = line.strip()
             self.ent2id[entity_str] = idx
-        for idx, line in enumerate(open('./FB15k-237/relations.txt')):
+        for idx, line in enumerate(open('./{}/relations.txt'.format(self.dataset))):
             relation_str = line.strip()
             self.rel2id[relation_str] = idx
 
@@ -200,8 +211,46 @@ class Data(object):
                         sub_id
                     )  # append the reversed edges
                   
-        edge_index_type = np.load('graph_with_olliverRicci_add_0_bridge.npy')
-        orc = np.load('orc_with_olliverRicci_add_0_bridge.npy')
+        graph_npy = './{}/graph_with_olliverRicci.npy'.format(self.dataset)
+        orc_npy = './{}/olliverRicci.npy'.format(self.dataset)
+        if not (os.path.exists(graph_npy) and os.path.exists(orc_npy)):
+            raise FileNotFoundError(
+                "Missing pre-computed ORC files for dataset '{}':\n"
+                "  {}\n  {}\n"
+                "These store the training graph as an int array of shape (3, E) "
+                "[src_entity_id, dst_entity_id, relation_id] and a matching float "
+                "array of ORC values (1 value per edge). Regenerate them with "
+                "entity ids (for WN18RR run scripts/build_wn18rr_orc_npy.py; "
+                "see README) before running this dataset.".format(self.dataset, graph_npy, orc_npy)
+            )
+        edge_index_type = np.load(graph_npy)
+        orc = np.load(orc_npy)
+        if edge_index_type.ndim != 2 or edge_index_type.shape[0] != 3:
+            raise ValueError(f"{graph_npy} must have shape (3, E); got {edge_index_type.shape}")
+        if orc.ndim != 1 or orc.shape[0] != edge_index_type.shape[1]:
+            raise ValueError(
+                f"ORC alignment error: {graph_npy} has {edge_index_type.shape[1]} edges "
+                f"but {orc_npy} has shape {orc.shape}"
+            )
+        self.edge_count_raw = int(orc.shape[0])
+        if self.random_curvature:
+            # Ablation (w/ Random Curvature): replace true ORC with uniform noise
+            # sampled from the observed range [-2, 1].
+            print("Ablation: replacing true ORC with random noise in [-2, 1]")
+            orc = np.random.uniform(-2.0, 1.0, size=orc.shape)
+        if self.prune_topk_orc and self.prune_topk_orc > 0.0:
+            # Table 3: remove the top-k% highest-ORC edges from the aggregation
+            # graph (same selection rule as get_deleted_train_based_on_orc.py).
+            E = orc.shape[0]
+            k = int(E * self.prune_topk_orc)
+            if k > 0:
+                gate = np.partition(orc, -k)[-k]  # k-th largest ORC value
+                keep = orc < gate
+                print("Pruning top {:.0%} highest-ORC edges: {} removed, {} kept".format(
+                    self.prune_topk_orc, E - int(keep.sum()), int(keep.sum())))
+                edge_index_type = edge_index_type[:, keep]
+                orc = orc[keep]
+        self.edge_count_after_pruning = int(orc.shape[0])
         for col in range(edge_index_type.shape[1]):
             sub_id = int(edge_index_type[0][col])
             obj_id = int(edge_index_type[1][col])
@@ -223,6 +272,7 @@ class Data(object):
         orc = torch.Tensor(np.concatenate([orc, orc]))
 
         self.g = dgl.graph((src, dst), num_nodes=self.num_ent)
+        self.num_message_edges = int(self.g.num_edges())
         self.g.edata["etype"] = torch.Tensor(rels).long()
         
         self.g.edata["1-orc"] = edge_softmax(self.g, orc, norm_by="dst")
