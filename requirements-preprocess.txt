@@ -1,0 +1,5 @@
+# Optional dependencies for scripts/compute_orc.py
+# Install the training stack first, then:
+pandas>=1.3
+networkit>=10.0
+POT>=0.9
