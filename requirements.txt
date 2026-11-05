@@ -1,20 +1,32 @@
-# ORCA-GCN environment (Python 3.8 or 3.9)
-# Install torch and DGL CUDA-specific builds FIRST, matching your CUDA version.
-# Recommended tested-compatible stack: Python 3.9 + PyTorch 1.12.1 + DGL 0.9.1
-# torch_scatter is not required by the current implementation.
-# CUDA 11.3:
-# pip install torch==1.12.1+cu113 --extra-index-url https://download.pytorch.org/whl/cu113
-# pip install dgl==0.9.1 -f https://data.dgl.ai/wheels/cu113/repo.html
-# CUDA 11.6:
-# pip install torch==1.12.1+cu116 --extra-index-url https://download.pytorch.org/whl/cu116
-# pip install dgl==0.9.1 -f https://data.dgl.ai/wheels/cu116/repo.html
-# CPU:
-# pip install torch==1.12.1+cpu --extra-index-url https://download.pytorch.org/whl/cpu
-# pip install dgl==0.9.1 -f https://data.dgl.ai/wheels/repo.html
-# Select a compatible wheel: https://www.dgl.ai/pages/start.html
+# ============================================================
+#  ORCA-GCN environment   (Python 3.8 or 3.9)
+# ============================================================
+#  torch and dgl ship CUDA-specific builds and must be installed
+#  FIRST, matched to your CUDA version, from their own indexes.
+#  Then run:  pip install -r requirements.txt   for the rest.
+#
+#  Recommended tested-compatible stack:
+#      Python 3.9  +  PyTorch 1.12.1  +  DGL 0.9.1
+#  (torch_scatter is NOT needed — the previous import was unused.)
+#
+#  --- CUDA 11.3 ---
+#    pip install torch==1.12.1+cu113 --extra-index-url https://download.pytorch.org/whl/cu113
+#    pip install dgl==0.9.1 -f https://data.dgl.ai/wheels/cu113/repo.html
+#
+#  --- CUDA 11.6 ---
+#    pip install torch==1.12.1+cu116 --extra-index-url https://download.pytorch.org/whl/cu116
+#    pip install dgl==0.9.1 -f https://data.dgl.ai/wheels/cu116/repo.html
+#
+#  --- CPU only ---
+#    pip install torch==1.12.1+cpu --extra-index-url https://download.pytorch.org/whl/cpu
+#    pip install dgl==0.9.1 -f https://data.dgl.ai/wheels/repo.html
+#
+#  Unsure of the exact dgl wheel URL? Use the version/CUDA selector at
+#    https://www.dgl.ai/pages/start.html   (pick 0.9.x + your CUDA)
+# ============================================================
 
-numpy>=1.21,<2.0
+numpy>=1.21,<2.0      # numpy 2.x is incompatible with torch 1.12
 ordered-set
-networkx>=2.6
+networkx>=2.6         # only needed to (re)build WN18RR ORC from the .gml
 tqdm
-wandb
+wandb                 # optional; enable logging with --use_wandb
